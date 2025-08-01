@@ -6,7 +6,7 @@ API_KEY = "lHHnyClmPHpxAPMCLDqDtMykU8U2kON7lLG9TOuRVNtV4cHxVtCOTaxIXjkCiBQE"
 
 UPLOAD_URL = "https://backend.scandocflow.com/v1/api/documents/extractAsync"
 
-file_path = "./image6.jpg"
+file_path = "./image8.jpg"
 
 payload = {
     "type": "ocr",
