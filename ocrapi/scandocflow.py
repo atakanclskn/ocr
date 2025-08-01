@@ -1,6 +1,8 @@
 import requests
 import time
 import json
+import os
+from datetime import datetime
 
 API_KEY = "lHHnyClmPHpxAPMCLDqDtMykU8U2kON7lLG9TOuRVNtV4cHxVtCOTaxIXjkCiBQE"
 UPLOAD_URL = "https://backend.scandocflow.com/v1/api/documents/extractAsync"
@@ -112,10 +114,16 @@ while time_waited < max_wait_time:
                 if all_text.strip():
                     print(f"\nToplam {len(all_text)} karakter metin çıkarıldı.")
                     
+                    # Dosya adını ve tarih bilgisini hazırla
+                    base_filename = os.path.basename(file_path)
+                    name_without_ext = os.path.splitext(base_filename)[0]
+                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    output_filename = f"{name_without_ext}_{timestamp}.txt"
+                    
                     # Metni dosyaya kaydet
-                    with open("ocr_result.txt", "w", encoding="utf-8") as f:
+                    with open(output_filename, "w", encoding="utf-8") as f:
                         f.write(all_text)
-                    print("✅ Metin 'ocr_result.txt' dosyasına kaydedildi.")
+                    print(f"✅ Metin '{output_filename}' dosyasına kaydedildi.")
                     
                     # İlk 500 karakteri göster
                     print("\n--- Çıkarılan Metin (İlk 500 karakter) ---")
@@ -136,9 +144,11 @@ while time_waited < max_wait_time:
                     print("\nUYARI: Doküman bulundu ancak metin çıkarılamadı!")
                     
                     # Debug için tam yanıtı kaydet
-                    with open("api_full_response.json", "w", encoding="utf-8") as f:
+                    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    debug_filename = f"api_response_{timestamp}.json"
+                    with open(debug_filename, "w", encoding="utf-8") as f:
                         json.dump(result, f, indent=2, ensure_ascii=False)
-                    print("Tam API yanıtı 'api_full_response.json' dosyasına kaydedildi.")
+                    print(f"Tam API yanıtı '{debug_filename}' dosyasına kaydedildi.")
             else:
                 print("\nUYARI: Hiç doküman bulunamadı!")
                 print("Tam yanıt:")
