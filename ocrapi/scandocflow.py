@@ -1,10 +1,24 @@
 # Gerekli kütüphaneleri import et
-# Not: Gemini API için önce kurulum yapın: pip install google-generativeai openpyxl
+# Not: Kurulum için: pip install google-generativeai openpyxl python-dotenv
 import requests
 import time
 import json
 import os
 from datetime import datetime
+
+# .env dosyasını yükle
+load_dotenv()
+print("\n📋 Sistem Kontrolü:")
+
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("⚠️  python-dotenv kütüphanesi kurulu değil!")
+    print("   Kurmak için: pip install python-dotenv")
+    print("   Environment variables sistem üzerinden ayarlanmalı.\n")
+
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
@@ -23,18 +37,19 @@ except ImportError:
     print("   Kurmak için: pip install openpyxl")
     print("   Excel çıktısı oluşturulamayacak.\n")
 
-API_KEY = "lHHnyClmPHpxAPMCLDqDtMykU8U2kON7lLG9TOuRVNtV4cHxVtCOTaxIXjkCiBQE"
-GEMINI_API_KEY = "AIzaSyBnPw6fjlSk4BDDLAG-IbQItB5N03ZmqPs"  # Gemini API anahtarınızı buraya girin
+API_KEY = os.getenv("SCANDOCFLOW_API_KEY", "rtsuU4o3Cpyhhmc8JoGVotVQTYUanls0mPg8moTNRHaEvJfeS6j4C123e0lbFHfD")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBnPw6fjlSk4BDDLAG-IbQItB5N03ZmqPs")
 UPLOAD_URL = "https://backend.scandocflow.com/v1/api/documents/extractAsync"
 STATUS_URL = "https://backend.scandocflow.com/v1/api/documents/status"
-file_path = "./image8.jpg"
-excel_template_path = "./beyanname şablon.xlsx"  # Excel şablon dosyası
+file_path = os.getenv("OCR_FILE_PATH", "./image8.jpg")  # Dosya yolu da env'den alınabilir
+excel_template_path = os.getenv("EXCEL_TEMPLATE_PATH", "./beyanname şablon.xlsx")
 
 # Gemini API yapılandırması
 if GEMINI_AVAILABLE and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
     genai.configure(api_key=GEMINI_API_KEY)
-elif GEMINI_API_KEY == "YOUR_GEMINI_API_KEY":
-    print("⚠️  Gemini API anahtarı ayarlanmamış! Kod içinde GEMINI_API_KEY değişkenini güncelleyin.\n")
+print(f"✅ API anahtarları yüklendi.")
+print(f"📁 OCR dosyası: {file_path}")
+print(f"📊 Excel şablonu: {excel_template_path}\n")
 
 # OCR işlemi için parametreler
 payload = {
@@ -43,8 +58,14 @@ payload = {
     "retain": "true",
 }
 
+# Dosya kontrolü
+if not os.path.exists(file_path):
+    print(f"❌ Hata: '{file_path}' dosyası bulunamadı!")
+    print("   Lütfen OCR yapılacak görsel dosyasını kontrol edin.")
+    exit()
+
 # Dosya yükleyip OCR işlemini başlat
-print("Dosya yükleniyor...")
+print(f"📸 Dosya yükleniyor: {file_path}")
 with open(file_path, "rb") as file:
     response = requests.post(
         UPLOAD_URL,
@@ -145,12 +166,6 @@ while time_waited < max_wait_time:
                     base_filename = os.path.basename(file_path)
                     name_without_ext = os.path.splitext(base_filename)[0]
                     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    output_filename = f"{name_without_ext}_{timestamp}.txt"
-                    
-                    # Metni dosyaya kaydet
-                    with open(output_filename, "w", encoding="utf-8") as f:
-                        f.write(all_text)
-                    print(f"✅ Metin '{output_filename}' dosyasına kaydedildi.")
                     
                     # İlk 500 karakteri göster
                     print("\n--- Çıkarılan Metin (İlk 500 karakter) ---")
@@ -163,7 +178,8 @@ while time_waited < max_wait_time:
                         
                         try:
                             # Gemini model oluştur (güncel model adını kullan)
-                            model = genai.GenerativeModel('gemini-2.5-flash')  # veya 'gemini-1.5-pro'
+                            # Mevcut modeller: gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash-exp
+                            model = genai.GenerativeModel('gemini-1.5-pro')  # En güçlü model
                             
                             # Prompt hazırla
                             prompt = f"""
@@ -199,78 +215,98 @@ while time_waited < max_wait_time:
                             response = model.generate_content(prompt)
                             
                             # Gemini yanıtını göster
+                            gemini_text = response.text if hasattr(response, 'text') else str(response)
                             print("\n✅ Gemini API yanıtı alındı!")
                             print("\n" + "="*50)
                             print("BEYANNAME BİLGİLERİ (EXCEL FORMATI):")
                             print("="*50)
-                            print(response.text)
+                            print(gemini_text)
                             print("="*50)
-                            
-                            # Gemini yanıtını da dosyaya kaydet
-                            gemini_filename = f"{name_without_ext}_{timestamp}_beyanname_bilgileri.txt"
-                            with open(gemini_filename, "w", encoding="utf-8") as f:
-                                f.write("BEYANNAME BİLGİLERİ (EXCEL FORMATI)\n")
-                                f.write("="*50 + "\n\n")
-                                f.write(response.text)
-                                f.write("\n\n" + "="*50 + "\n")
-                                f.write("\nORİJİNAL OCR METNİ:\n")
-                                f.write("="*50 + "\n")
-                                f.write(all_text)
-                            
-                            print(f"\n📁 Beyanname bilgileri '{gemini_filename}' dosyasına kaydedildi.")
                             
                             # Excel şablonuna verileri yaz
                             if EXCEL_AVAILABLE:
                                 try:
                                     # Gemini yanıtını parse et
-                                    lines = response.text.strip().split('\n')
+                                    lines = gemini_text.strip().split('\n')
                                     data_dict = {}
                                     for line in lines:
                                         if ':' in line:
                                             key, value = line.split(':', 1)
                                             data_dict[key.strip()] = value.strip()
                                     
+                                    print("\n📊 Çıkarılan veriler:")
+                                    for key, value in data_dict.items():
+                                        print(f"   {key}: {value}")
+                                    
                                     # Şablon Excel dosyasını aç
                                     if os.path.exists(excel_template_path):
                                         workbook = openpyxl.load_workbook(excel_template_path)
                                         sheet = workbook.active
                                         
-                                        # Sütun başlıklarını bul
+                                        # Sütun başlıklarını ve indekslerini bul
                                         column_mapping = {}
-                                        for col in range(1, sheet.max_column + 1):
+                                        max_col = sheet.max_column if sheet.max_column else 1
+                                        for col in range(1, max_col + 1):
                                             header = sheet.cell(row=1, column=col).value
-                                            if header:
-                                                header = header.strip()
-                                                if header == "Alıcı D.Ö":
+                                            if header and isinstance(header, str):
+                                                header_clean = header.strip()
+                                                # Tam eşleşme kontrolü
+                                                if header_clean == "Alıcı D.Ö":
                                                     column_mapping["Alıcı"] = col
-                                                elif header == "ALICI VKN":
+                                                elif header_clean == "ALICI VKN":
                                                     column_mapping["ALICI VKN"] = col
-                                                elif header == "KONTEYNER NO":
+                                                elif header_clean == "KONTEYNER NO":
                                                     column_mapping["KONTEYNER NO"] = col
-                                                elif header == "Teslim şekli":
+                                                elif header_clean == "Teslim şekli":
                                                     column_mapping["Teslim şekli"] = col
-                                                elif header == "Brüt KG":
+                                                elif header_clean == "Brüt KG":
                                                     column_mapping["Brüt KG"] = col
-                                                elif header == "SON AMBAR":
+                                                elif header_clean == "SON AMBAR":
                                                     column_mapping["SON AMBAR"] = col
-                                                elif header == "ÖZET BEYAN NO":
+                                                elif header_clean == "ÖZET BEYAN NO":
                                                     column_mapping["ÖZET BEYAN NO"] = col
-                                                elif header == "BEYANNAME TESCİL TARİHİ":
+                                                elif header_clean == "BEYANNAME TESCİL TARİHİ":
                                                     column_mapping["BEYANNAME TESCİL TARİHİ"] = col
-                                                elif header == "TAREKS-TARIM-TSE (VAR-YOK)":
+                                                elif header_clean == "TAREKS-TARIM-TSE (VAR-YOK)" or header_clean == "TAREKS-TARIM-TSE":
                                                     column_mapping["TAREKS-TARIM-TSE"] = col
+                                        
+                                        print(f"\n📋 Excel'de bulunan sütunlar: {list(column_mapping.keys())}")
                                         
                                         # İlk boş satırı bul
                                         next_row = 2
-                                        for row in range(2, sheet.max_row + 2):
-                                            if not any(sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)):
+                                        max_row = sheet.max_row if sheet.max_row else 1
+                                        max_col = sheet.max_column if sheet.max_column else 1
+                                        for row in range(2, max_row + 2):
+                                            # A sütununda (Alıcı) veri yoksa boş satırdır
+                                            if column_mapping.get("Alıcı") and not sheet.cell(row=row, column=column_mapping["Alıcı"]).value:
+                                                next_row = row
+                                                break
+                                            # Veya ilk birkaç sütunda veri yoksa
+                                            elif not any(sheet.cell(row=row, column=col).value for col in range(1, min(5, max_col + 1))):
                                                 next_row = row
                                                 break
                                         
+                                        print(f"\n📝 Veriler {next_row}. satıra yazılacak")
+                                        
                                         # Verileri yaz
+                                        written_count = 0
                                         for field, col in column_mapping.items():
                                             if field in data_dict:
-                                                sheet.cell(row=next_row, column=col).value = data_dict[field]
+                                                value = data_dict[field]
+                                                # "Belirtilmemiş" değerini boş bırak
+                                                if value.lower() != "belirtilmemiş":
+                                                    sheet.cell(row=next_row, column=col).value = value
+                                                    written_count += 1
+                                                    print(f"   ✓ {field} → Sütun {col}: {value}")
+                                        
+                                        # Kayıt tarihini ekle (varsa)
+                                        max_col = sheet.max_column if sheet.max_column else 1
+                                        for col in range(1, max_col + 1):
+                                            header = sheet.cell(row=1, column=col).value
+                                            if header and isinstance(header, str) and "KAYIT TARİHİ" in header:
+                                                sheet.cell(row=next_row, column=col).value = datetime.now().strftime("%d.%m.%Y")
+                                                print(f"   ✓ Kayıt Tarihi → Sütun {col}: {datetime.now().strftime('%d.%m.%Y')}")
+                                                break
                                         
                                         # Excel dosyasını kaydet
                                         excel_filename = f"{name_without_ext}_{timestamp}_beyanname_dolu.xlsx"
@@ -278,80 +314,29 @@ while time_waited < max_wait_time:
                                         workbook.close()
                                         
                                         print(f"\n✅ Excel şablonu dolduruldu: '{excel_filename}'")
-                                        print(f"   Veriler {next_row}. satıra eklendi.")
+                                        print(f"   Toplam {written_count} alan dolduruldu.")
                                         
                                     else:
                                         print(f"\n⚠️  Excel şablonu '{excel_template_path}' bulunamadı!")
+                                        print("   Lütfen 'beyanname şablon.xlsx' dosyasını kod ile aynı klasöre koyun.")
                                         
-                                        # Yeni Excel oluştur
-                                        workbook = openpyxl.Workbook()
-                                        sheet = workbook.active
-                                        
-                                        # Başlıkları ekle
-                                        headers = ["Alıcı D.Ö", "ALICI VKN", "Nakliyeci", "Fat. Tarihi", 
-                                                  "Tahmini Çıkış Tarihi", "Varış Tarihi", "Çıkış Limanı", 
-                                                  "HBL", "KONTEYNER NO", "Teslim şekli", "Brüt KG", 
-                                                  "Hacim", "Rakip Navlun w/m", "Navlun Fatura Tutarı", 
-                                                  "Rakip EXW / FCA All in Fatura Tutarı", "Konsol/Komple", 
-                                                  "Öykü Dönem", "Navlun w/m Total", "Fark w/m", "Varış Limanı", 
-                                                  "SON AMBAR", "HAT", "ÖZET BEYAN NO", "BEYANNAME TESCİL TARİHİ", 
-                                                  "TAREKS-TARIM-TSE (VAR-YOK)", "KAYIT TARİHİ"]
-                                        
-                                        for col, header in enumerate(headers, 1):
-                                            sheet.cell(row=1, column=col).value = header
-                                            sheet.cell(row=1, column=col).font = openpyxl.styles.Font(bold=True)
-                                        
-                                        # Verileri 2. satıra ekle
-                                        sheet.cell(row=2, column=1).value = data_dict.get("Alıcı", "")
-                                        sheet.cell(row=2, column=2).value = data_dict.get("ALICI VKN", "")
-                                        sheet.cell(row=2, column=9).value = data_dict.get("KONTEYNER NO", "")
-                                        sheet.cell(row=2, column=10).value = data_dict.get("Teslim şekli", "")
-                                        sheet.cell(row=2, column=11).value = data_dict.get("Brüt KG", "")
-                                        sheet.cell(row=2, column=21).value = data_dict.get("SON AMBAR", "")
-                                        sheet.cell(row=2, column=23).value = data_dict.get("ÖZET BEYAN NO", "")
-                                        sheet.cell(row=2, column=24).value = data_dict.get("BEYANNAME TESCİL TARİHİ", "")
-                                        sheet.cell(row=2, column=25).value = data_dict.get("TAREKS-TARIM-TSE", "")
-                                        sheet.cell(row=2, column=26).value = datetime.now().strftime("%d.%m.%Y")
-                                        
-                                        # Sütun genişliklerini ayarla
-                                        for col in range(1, 27):
-                                            sheet.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 15
-                                        
-                                        excel_filename = f"{name_without_ext}_{timestamp}_beyanname_yeni.xlsx"
-                                        workbook.save(excel_filename)
-                                        workbook.close()
-                                        
-                                        print(f"\n✅ Yeni Excel dosyası oluşturuldu: '{excel_filename}'")
+                                        # Sadece değerleri göster
+                                        print("\n📋 Çıkarılan değerler (manuel giriş için):")
+                                        for key, value in data_dict.items():
+                                            print(f"   {key}: {value}")
                                         
                                 except Exception as e:
                                     print(f"\n❌ Excel işleme hatası: {e}")
-                            
-                            # CSV formatında da kaydet (eski kod korunuyor)
-                            try:
-                                # CSV dosyası oluştur
-                                csv_filename = f"{name_without_ext}_{timestamp}_beyanname.csv"
-                                with open(csv_filename, "w", encoding="utf-8-sig") as f:
-                                    # Başlıkları yaz
-                                    headers = ["Alıcı", "ALICI VKN", "KONTEYNER NO", "Teslim şekli", 
-                                              "Brüt KG", "SON AMBAR", "ÖZET BEYAN NO", 
-                                              "BEYANNAME TESCİL TARİHİ", "TAREKS-TARIM-TSE"]
-                                    f.write(";".join(headers) + "\n")
-                                    
-                                    # Değerleri yaz
-                                    values = []
-                                    for header in headers:
-                                        values.append(data_dict.get(header, ""))
-                                    f.write(";".join(values) + "\n")
-                                
-                                print(f"\n📊 CSV dosyası '{csv_filename}' olarak da kaydedildi.")
-                                
-                            except Exception as e:
-                                print(f"CSV oluşturma hatası: {e}")
+                                    import traceback
+                                    traceback.print_exc()
+                            else:
+                                print("\n⚠️  OpenPyXL kütüphanesi kurulu değil!")
+                                print("   Excel çıktısı için: pip install openpyxl")
                             
                         except Exception as e:
                             print(f"\n❌ Gemini API hatası: {e}")
-                            print("Not: Gemini API anahtarınızı ve model adını kontrol edin.")
-                            print("Mevcut modeller: gemini-1.5-flash, gemini-1.5-pro")
+                            print("Not: API anahtarınızı ve internet bağlantınızı kontrol edin.")
+                            print("Mevcut modeller: gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash-exp")
                     
                     # API'den doküman ID'sini al ve web export linkini oluştur
                     if documents:
@@ -427,4 +412,6 @@ if not success:
     print("3. Web arayüzünde işlemin durumunu kontrol edin")
     print("4. Dosya boyutunun 50MB'ı aşmadığından emin olun")
     
-print("\n\nİşlem tamamlandı.")
+print("\n" + "="*60)
+print("✅ İşlem tamamlandı!")
+print("="*60)
