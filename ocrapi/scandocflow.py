@@ -15,7 +15,7 @@ except ImportError:
     print("   OCR işlemi devam edecek ancak Gemini analizi yapılamayacak.\n")
 
 API_KEY = "lHHnyClmPHpxAPMCLDqDtMykU8U2kON7lLG9TOuRVNtV4cHxVtCOTaxIXjkCiBQE"
-GEMINI_API_KEY = "AIzaSyBnPw6fjlSk4BDDLAG-IbQItB5N03ZmqPs"  # Gemini API anahtarınızı buraya girin
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"  # Gemini API anahtarınızı buraya girin
 UPLOAD_URL = "https://backend.scandocflow.com/v1/api/documents/extractAsync"
 STATUS_URL = "https://backend.scandocflow.com/v1/api/documents/status"
 file_path = "./image8.jpg"
@@ -149,21 +149,37 @@ while time_waited < max_wait_time:
                     
                     # OCR sonucunu Gemini'ye gönder
                     if GEMINI_AVAILABLE and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
-                        print("\n\n📤 OCR sonucu Gemini API'ye gönderiliyor...")
+                        print("\n\n📤 Beyanname bilgileri çıkarılıyor...")
                         
                         try:
-                            # Gemini model oluştur
+                            # Gemini model oluştur (güncel model adını kullan)
                             model = genai.GenerativeModel('gemini-1.5-flash')  # veya 'gemini-1.5-pro'
                             
                             # Prompt hazırla
                             prompt = f"""
-                            Aşağıdaki OCR ile çıkarılmış metni analiz et ve düzenle:
+                            Sen bir gümrük beyannamesi uzmanısın. Aşağıdaki OCR ile çıkarılmış beyanname metnini analiz et ve sadece istenen bilgileri çıkar.
                             
-                            1. Metindeki yazım hatalarını düzelt
-                            2. Cümleleri anlamlı hale getir
-                            3. Paragraf yapısını düzenle
-                            4. Önemli bilgileri vurgula
-                            5. Metnin genel bir özetini çıkar
+                            İstenen bilgiler ve açıklamaları:
+                            - Alıcı: İthalatçı firma adı
+                            - ALICI VKN: Alıcı firma vergi kimlik numarası (10 veya 11 haneli sayı)
+                            - KONTEYNER NO: Konteyner numarası (varsa)
+                            - Teslim şekli: Teslim şekli bilgisi (örn: EXW, FCA, FOB, CIF vb.)
+                            - Brüt KG: Brüt ağırlık kilogram cinsinden
+                            - SON AMBAR: Gümrük müdürlüğü adı
+                            - ÖZET BEYAN NO: Beyanname numarası
+                            - BEYANNAME TESCİL TARİHİ: Beyanname tescil tarihi
+                            - TAREKS-TARIM-TSE: Belgelerde TAREKS, TARIM veya TSE ibaresi geçiyorsa VAR, geçmiyorsa YOK yaz
+                            
+                            ÇIKTI FORMATI (SADECE BU FORMATTA YAZ, BAŞKA BİR ŞEY EKLEME):
+                            Alıcı: [değer]
+                            ALICI VKN: [değer]
+                            KONTEYNER NO: [değer veya "Belirtilmemiş"]
+                            Teslim şekli: [değer veya "Belirtilmemiş"]
+                            Brüt KG: [değer veya "Belirtilmemiş"]
+                            SON AMBAR: [değer]
+                            ÖZET BEYAN NO: [değer]
+                            BEYANNAME TESCİL TARİHİ: [değer]
+                            TAREKS-TARIM-TSE: [VAR veya YOK]
                             
                             OCR Metni:
                             {all_text}
@@ -175,15 +191,15 @@ while time_waited < max_wait_time:
                             # Gemini yanıtını göster
                             print("\n✅ Gemini API yanıtı alındı!")
                             print("\n" + "="*50)
-                            print("GEMINI ANALİZ SONUCU:")
+                            print("BEYANNAME BİLGİLERİ (EXCEL FORMATI):")
                             print("="*50)
                             print(response.text)
                             print("="*50)
                             
                             # Gemini yanıtını da dosyaya kaydet
-                            gemini_filename = f"{name_without_ext}_{timestamp}_gemini_analiz.txt"
+                            gemini_filename = f"{name_without_ext}_{timestamp}_beyanname_bilgileri.txt"
                             with open(gemini_filename, "w", encoding="utf-8") as f:
-                                f.write("GEMINI ANALİZ SONUCU\n")
+                                f.write("BEYANNAME BİLGİLERİ (EXCEL FORMATI)\n")
                                 f.write("="*50 + "\n\n")
                                 f.write(response.text)
                                 f.write("\n\n" + "="*50 + "\n")
@@ -191,11 +207,43 @@ while time_waited < max_wait_time:
                                 f.write("="*50 + "\n")
                                 f.write(all_text)
                             
-                            print(f"\n📁 Gemini analizi '{gemini_filename}' dosyasına kaydedildi.")
+                            print(f"\n📁 Beyanname bilgileri '{gemini_filename}' dosyasına kaydedildi.")
+                            
+                            # CSV formatında da kaydet
+                            try:
+                                # Gemini yanıtını parse et
+                                lines = response.text.strip().split('\n')
+                                csv_data = {}
+                                for line in lines:
+                                    if ':' in line:
+                                        key, value = line.split(':', 1)
+                                        csv_data[key.strip()] = value.strip()
+                                
+                                # CSV dosyası oluştur
+                                csv_filename = f"{name_without_ext}_{timestamp}_beyanname.csv"
+                                with open(csv_filename, "w", encoding="utf-8-sig") as f:
+                                    # Başlıkları yaz
+                                    headers = ["Alıcı", "ALICI VKN", "KONTEYNER NO", "Teslim şekli", 
+                                              "Brüt KG", "SON AMBAR", "ÖZET BEYAN NO", 
+                                              "BEYANNAME TESCİL TARİHİ", "TAREKS-TARIM-TSE"]
+                                    f.write(";".join(headers) + "\n")
+                                    
+                                    # Değerleri yaz
+                                    values = []
+                                    for header in headers:
+                                        values.append(csv_data.get(header, ""))
+                                    f.write(";".join(values) + "\n")
+                                
+                                print(f"📊 CSV dosyası '{csv_filename}' olarak kaydedildi.")
+                                print("   (Excel'de açmak için noktalı virgül ayırıcı kullanın)")
+                                
+                            except Exception as e:
+                                print(f"CSV oluşturma hatası: {e}")
                             
                         except Exception as e:
                             print(f"\n❌ Gemini API hatası: {e}")
-                            print("Not: Gemini API anahtarınızı kontrol edin veya internet bağlantınızı kontrol edin.")
+                            print("Not: Gemini API anahtarınızı ve model adını kontrol edin.")
+                            print("Mevcut modeller: gemini-1.5-flash, gemini-1.5-pro")
                     
                     # API'den doküman ID'sini al ve web export linkini oluştur
                     if documents:
