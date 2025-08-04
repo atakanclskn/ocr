@@ -1,13 +1,30 @@
+# Gerekli kütüphaneleri import et
+# Not: Gemini API için önce kurulum yapın: pip install google-generativeai
 import requests
 import time
 import json
 import os
 from datetime import datetime
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("⚠️  Gemini API kütüphanesi kurulu değil!")
+    print("   Kurmak için: pip install google-generativeai")
+    print("   OCR işlemi devam edecek ancak Gemini analizi yapılamayacak.\n")
 
 API_KEY = "lHHnyClmPHpxAPMCLDqDtMykU8U2kON7lLG9TOuRVNtV4cHxVtCOTaxIXjkCiBQE"
+GEMINI_API_KEY = "AIzaSyBnPw6fjlSk4BDDLAG-IbQItB5N03ZmqPs"  # Gemini API anahtarınızı buraya girin
 UPLOAD_URL = "https://backend.scandocflow.com/v1/api/documents/extractAsync"
 STATUS_URL = "https://backend.scandocflow.com/v1/api/documents/status"
 file_path = "./image8.jpg"
+
+# Gemini API yapılandırması
+if GEMINI_AVAILABLE and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
+    genai.configure(api_key=GEMINI_API_KEY)
+elif GEMINI_API_KEY == "YOUR_GEMINI_API_KEY":
+    print("⚠️  Gemini API anahtarı ayarlanmamış! Kod içinde GEMINI_API_KEY değişkenini güncelleyin.\n")
 
 # OCR işlemi için parametreler
 payload = {
@@ -129,6 +146,56 @@ while time_waited < max_wait_time:
                     print("\n--- Çıkarılan Metin (İlk 500 karakter) ---")
                     print(all_text[:500] + "..." if len(all_text) > 500 else all_text)
                     print("--- Metin Sonu ---")
+                    
+                    # OCR sonucunu Gemini'ye gönder
+                    if GEMINI_AVAILABLE and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
+                        print("\n\n📤 OCR sonucu Gemini API'ye gönderiliyor...")
+                        
+                        try:
+                            # Gemini model oluştur
+                            model = genai.GenerativeModel('gemini-1.5-flash')  # veya 'gemini-1.5-pro'
+                            
+                            # Prompt hazırla
+                            prompt = f"""
+                            Aşağıdaki OCR ile çıkarılmış metni analiz et ve düzenle:
+                            
+                            1. Metindeki yazım hatalarını düzelt
+                            2. Cümleleri anlamlı hale getir
+                            3. Paragraf yapısını düzenle
+                            4. Önemli bilgileri vurgula
+                            5. Metnin genel bir özetini çıkar
+                            
+                            OCR Metni:
+                            {all_text}
+                            """
+                            
+                            # Gemini'ye gönder
+                            response = model.generate_content(prompt)
+                            
+                            # Gemini yanıtını göster
+                            print("\n✅ Gemini API yanıtı alındı!")
+                            print("\n" + "="*50)
+                            print("GEMINI ANALİZ SONUCU:")
+                            print("="*50)
+                            print(response.text)
+                            print("="*50)
+                            
+                            # Gemini yanıtını da dosyaya kaydet
+                            gemini_filename = f"{name_without_ext}_{timestamp}_gemini_analiz.txt"
+                            with open(gemini_filename, "w", encoding="utf-8") as f:
+                                f.write("GEMINI ANALİZ SONUCU\n")
+                                f.write("="*50 + "\n\n")
+                                f.write(response.text)
+                                f.write("\n\n" + "="*50 + "\n")
+                                f.write("\nORİJİNAL OCR METNİ:\n")
+                                f.write("="*50 + "\n")
+                                f.write(all_text)
+                            
+                            print(f"\n📁 Gemini analizi '{gemini_filename}' dosyasına kaydedildi.")
+                            
+                        except Exception as e:
+                            print(f"\n❌ Gemini API hatası: {e}")
+                            print("Not: Gemini API anahtarınızı kontrol edin veya internet bağlantınızı kontrol edin.")
                     
                     # API'den doküman ID'sini al ve web export linkini oluştur
                     if documents:
