@@ -1,0 +1,4 @@
+{
+  "name": "Gümrük Beyannamesi Analiz Aracı",
+  "description": "Gümrük beyannamesi dokümanlarını yükleyip, OCR ile metin çıkarımı yaptıktan sonra, AI kullanarak anahtar bilgileri analiz eden bir uygulama."
+}
